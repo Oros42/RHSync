@@ -1,0 +1,19 @@
+wwwDir="/var/www/mywebsite"
+wwwTmp="/var/www/tmp/"
+
+keyserver="hkps://keys.openpgp.org"
+#keyserver="hkp://zkaan2xfbuxia2wpf7ofnkbz6r5zdbbvxbunvp5g2iebopbfc4iqmbad.onion"
+
+# Email use to sign Release.gz and ReleaseInfos 
+#email="<gpg.email@example.com>"
+email=""
+
+
+#nodes="https://example.com/
+#--user user --password pass https://example.com/private/"
+nodes=""
+
+# Where to store the private GPG key ?
+# absolute path
+# Chose a safe encrypted place out of Internet
+gpgHome="$(pwd)/private_keyrings/"
