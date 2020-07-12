@@ -51,7 +51,9 @@ function ckeckKey()
 	if [[ "$(gpg --no-default-keyring --keyring ./public_keyrings.gpg -k|grep $email)" == "" ]]; then
 		gpg --no-default-keyring --keyring ./public_keyrings.gpg --keyserver hkps://keys.openpgp.org --search-keys $email
 	fi
-	gpg --no-default-keyring --keyring ./public_keyrings.gpg --keyserver hkps://keys.openpgp.org --refresh-keys
+	if [[ $refreshKeys -eq 1 ]]; then
+		gpg --no-default-keyring --keyring ./public_keyrings.gpg --keyserver hkps://keys.openpgp.org --refresh-keys
+	fi
 }
 
 
@@ -102,29 +104,42 @@ function getVersion()
 {
 	local url=$1
 	local tmpDirectory=$(mktemp -d -t tmp.XXXXXXXXXX)
-	set +e
-	wget -q --tries=5 --timeout=60 "${url}ReleaseInfos" -O "$tmpDirectory/ReleaseInfos"
-	set -e
-	if [[ -s "$tmpDirectory/ReleaseInfos" ]]; then
-		checkAndExtract "$tmpDirectory/ReleaseInfos" "$tmpDirectory/ReleaseInfos.txt"
-		if [[ -s "$tmpDirectory/ReleaseInfos.txt" ]]; then
-			version=$(head -n 1 "$tmpDirectory/ReleaseInfos.txt")
-			hash=$(head -n 2 "$tmpDirectory/ReleaseInfos.txt"|tail -n 1)
+	if [[ "${url::7}" == "http://" || "${url::7}" == "https:/" ]]; then
+		set +e
+		wget -q --tries=5 --timeout=60 "${url}ReleaseInfos" -O "$tmpDirectory/ReleaseInfos"
+		set -e
+		ReleaseInfosPath="$tmpDirectory/ReleaseInfos"
+	else
+		ReleaseInfosPath=$url
+	fi
+	if [[ -s "$ReleaseInfosPath" ]]; then
+		ReleaseInfosTxtPath="$tmpDirectory/ReleaseInfos.txt"
+		checkAndExtract "$ReleaseInfosPath" "$ReleaseInfosTxtPath"
+		if [[ -s "$ReleaseInfosTxtPath" ]]; then
+			version=$(head -n 1 "$ReleaseInfosTxtPath")
+			hash=$(head -n 2 "$ReleaseInfosTxtPath"|tail -n 1)
 		else
 			version=""
 		fi
 	else
 		version=""	
 	fi
+
 	rm -r "$tmpDirectory"
 }
 
 function sync()
 {
-#TODO get local version
-	localVersion="2020-06-20 15:16:21 UTC"
-
 	ckeckKey
+
+	localVersion="2000-01-01 01:00:00 UTC"
+	getVersion $wwwTmp/ReleaseInfos
+	if [[ "$version" != "" ]]; then
+		localVersion=$version
+	fi
+
+echo "local $localVersion"
+
 
 	local canditateVersion=""
 	local canditateUrl=""
@@ -243,18 +258,21 @@ function help()
 		Options:
 		-c, --config	Path to the config file
 		-h, --help		Help
+		--refreshkeys	[1|0] 1: Refresh PGP key, 0: skip the refresh
 
 		Examples:
 		./$PROGNAME sync
 		./$PROGNAME -c myConf1 sync
+		./$PROGNAME -c myConf1 --refreshkeys 0 sync
 	EOF
 	exit
 }
 
 
 confName="config"
+refreshKeys=1
 
-eval set -- $(getopt -l conf:,help -o c:h -- "$@")
+eval set -- $(getopt -l conf:,help,refreshkeys: -o c:h -- "$@")
 
 while true
 do
@@ -267,6 +285,14 @@ do
 			;;
 		-h|--help)
 			help
+			;;
+		--refreshkeys)
+			if [[ "${1%:*}" -eq 1 ]]; then
+				refreshKeys=1
+			else
+				refreshKeys=0
+			fi
+			shift
 			;;
 		--)
 			break

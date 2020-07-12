@@ -30,5 +30,31 @@ So you need a display :-/
 ## If you host a clone
 
 ```bash
+./RHSync.sh index
 ./RHSync.sh sync
+```
+
+
+## Help
+
+```bash
+$ ./RHSync.sh 
+Remote HTTP Synchronization
+Usage: RHSync.sh [OPTION] ACTION
+
+Actions:
+sync		Synchronization
+index		Create new hash index (Contents.gz)
+release		Create new release (Release.gz + ReleaseInfos)
+keygen		Generate a PGP key used to sign Release.gz and ReleaseInfos
+
+Options:
+-c, --config	Path to the config file
+-h, --help		Help
+--refreshkeys	[1|0] 1: Refresh PGP key, 0: skip the refresh
+
+Examples:
+./RHSync.sh sync
+./RHSync.sh -c myConf1 sync
+./RHSync.sh -c myConf1 --refreshkeys 0 sync
 ```
