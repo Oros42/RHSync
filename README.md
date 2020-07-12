@@ -40,7 +40,7 @@ So you need a display :-/
 ```bash
 $ ./RHSync.sh 
 Remote HTTP Synchronization
-Usage: RHSync.sh [OPTION] ACTION
+Usage: RHSync.sh [OPTION] ACTION [wwwDir]
 
 Actions:
 sync		Synchronization
@@ -53,8 +53,12 @@ Options:
 -h, --help		Help
 --refreshkeys	[1|0] 1: Refresh PGP key, 0: skip the refresh
 
+wwwDir: Path to the www directory
+
 Examples:
 ./RHSync.sh sync
 ./RHSync.sh -c myConf1 sync
 ./RHSync.sh -c myConf1 --refreshkeys 0 sync
+./RHSync.sh index /var/www/mySite
+./RHSync.sh release /var/www/mySite
 ```

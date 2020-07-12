@@ -99,11 +99,23 @@ function checkAndExtract()
 	set -e
 }
 
+function cleanUpPath()
+{
+	if [[ ! "${wwwDir: -1}" == "/" ]]; then
+		wwwDir="$wwwDir/"
+	fi
+	if [[ ! "${wwwTmp: -1}" == "/" ]]; then
+		wwwDir="$wwwTmp/"
+	fi
+}
+
 
 function getVersion()
 {
 	local url=$1
 	local tmpDirectory=$(mktemp -d -t tmp.XXXXXXXXXX)
+	ReleaseInfosContentTmp=""
+
 	if [[ "${url::7}" == "http://" || "${url::7}" == "https:/" ]]; then
 		set +e
 		wget -q --tries=5 --timeout=60 "${url}ReleaseInfos" -O "$tmpDirectory/ReleaseInfos"
@@ -118,6 +130,7 @@ function getVersion()
 		if [[ -s "$ReleaseInfosTxtPath" ]]; then
 			version=$(head -n 1 "$ReleaseInfosTxtPath")
 			hash=$(head -n 2 "$ReleaseInfosTxtPath"|tail -n 1)
+			ReleaseInfosContentTmp=$(cat $ReleaseInfosPath)
 		else
 			version=""
 		fi
@@ -130,22 +143,26 @@ function getVersion()
 
 function sync()
 {
-	ckeckKey
-
-	localVersion="2000-01-01 01:00:00 UTC"
-	getVersion $wwwTmp/ReleaseInfos
-	if [[ "$version" != "" ]]; then
-		localVersion=$version
-	fi
-
-echo "local $localVersion"
-
-
 	local canditateVersion=""
 	local canditateUrl=""
 	local canditateHash=""
 	local version=""
 	local hash=""
+	local ReleaseInfosContent=""
+	local ReleaseInfosContentTmp=""
+
+	cleanUpPath
+
+	ckeckKey
+
+	localVersion="2000-01-01 01:00:00 UTC"
+
+	getVersion ${wwwDir}ReleaseInfos
+
+	if [[ "$version" != "" ]]; then
+		localVersion=$version
+	fi
+
 	# search the last version available
 	for url in $nodes; do 
 		getVersion $url
@@ -155,21 +172,29 @@ echo "local $localVersion"
 				canditateVersion=$version
 				canditateUrl=$url
 				canditateHash="$hash"
+				ReleaseInfosContent="$ReleaseInfosContentTmp"
+				#TODO remove from memory other servers in the same version
+			elif [[ "$canditateVersion" != "" || "$canditateVersion" == "$version" ]]; then
+				#TODO keep in memory other servers in the same version
+				echo "TODO keep in memory other servers in the same version"
 			fi
 		fi
 		version=""
 		hash=""
 	done
 
+	#TODO loop on all same version servers or exist if complete
 	if [[ "$canditateVersion" != "" 
 			&& "$canditateUrl" != "" 
 			&& "$canditateHash" != "" 
 		]]; then
 		local tmpDirectory=$(mktemp -d -t tmp.XXXXXXXXXX)
 echo  $tmpDirectory
-		set +e
+
+		echo $ReleaseInfosContent > $tmpDirectory/ReleaseInfos
 		echo "$canditateHash" > $tmpDirectory/Release.sum
 
+		set +e
 		wget -q --tries=5 --timeout=60 ${canditateUrl}Contents.gz -O $tmpDirectory/Contents.gz
 #TODO check error
 		wget -q --tries=5 --timeout=60 ${canditateUrl}Release.gz -O $tmpDirectory/Release.gz
@@ -222,12 +247,22 @@ echo  $tmpDirectory
 #FIXME some time the name of file is truncate :-/
 # need to fix long path + long file name
 # happen on encrypted partition
-				outDir=$(echo "$url" | awk -F/ '{print $3}' | sed 's|:80$||')
-				cat $tmpDirectory/availableNewFiles.url | parallel --gnu "wget --tries=5 --timeout=60 -qc -P $wwwTmp -x "'{}' > /dev/null 2>&1
-				pushd $wwwTmp/$outDir > /dev/null
+				#outDir=$(echo "$canditateUrl" | awk -F/ '{print $3}' | sed 's|:80$||')
+				cat $tmpDirectory/availableNewFiles.url | parallel --gnu "wget --tries=5 --timeout=60 -qc -P $wwwTmp -x -nH "'{}' > /dev/null 2>&1
+
+				pushd ${wwwTmp} > /dev/null
+#TODO loop on files and remove corrupted files
 				sha512sum -c $tmpDirectory/availableNewFiles
 				mv $tmpDirectory/Release.gz .
+				mv $tmpDirectory/ReleaseInfos ${wwwTmp}ReleaseInfos
 				popd > /dev/null
+
+#TODO
+# - create new Contents.gz
+# - mv wwwDir/* to wwwTmp/
+# - cleanup
+
+
 #FIXME
 				cp $tmpDirectory/Release ./cache/Contents
 			fi
@@ -235,7 +270,10 @@ echo  $tmpDirectory
 		fi
 
 echo "end :-)"
-#rm -r $tmpDirectory
+rm -r $tmpDirectory
+	else
+		#TODO quite mode
+		echo "No update"
 	fi
 	exit
 }
@@ -247,7 +285,7 @@ function help()
 	readonly PROGNAME=$(basename $0)
 	cat <<- EOF
 		Remote HTTP Synchronization
-		Usage: $PROGNAME [OPTION] ACTION
+		Usage: RHSync.sh [OPTION] ACTION [wwwDir]
 
 		Actions:
 		sync		Synchronization
@@ -260,10 +298,13 @@ function help()
 		-h, --help		Help
 		--refreshkeys	[1|0] 1: Refresh PGP key, 0: skip the refresh
 
+		wwwDir: Path to the www directory
+
 		Examples:
-		./$PROGNAME sync
-		./$PROGNAME -c myConf1 sync
-		./$PROGNAME -c myConf1 --refreshkeys 0 sync
+		./RHSync.sh sync
+		./RHSync.sh -c myConf1 sync
+		./RHSync.sh -c myConf1 --refreshkeys 0 sync
+		./RHSync.sh index /var/www/mySite
 	EOF
 	exit
 }
