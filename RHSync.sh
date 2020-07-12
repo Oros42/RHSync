@@ -5,10 +5,10 @@
 # author  Oros42 (ecirtam.net)
 # link    https://github.com/Oros42/RHSync
 # license CC0 Public Domain
-# date    2020-06-28
+# date    2020-07-12
 
 # need :
-# sudo apt install parallel gpg curl wget
+# sudo apt install parallel gpg wget
 
 set -euo pipefail
 
@@ -40,7 +40,9 @@ function makeGPGKey()
 	#gpg -a --export "$email" > public.gpg
 
 	echo "Open the link and click on send email verification"
-	gpg --keyserver hkps://keys.openpgp.org --export $email | curl -T - https://keys.openpgp.org
+	#gpg --export $email | curl -T - https://keys.openpgp.org
+	k=$(gpg -a --export $email)
+	wget --method=PUT --body-data="$k" https://keys.openpgp.org -qO-
 	exit
 }
 
