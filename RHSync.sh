@@ -5,7 +5,7 @@
 # author  Oros42 (ecirtam.net)
 # link    https://github.com/Oros42/RHSync
 # license CC0 Public Domain
-# date    2020-07-12
+# date    2020-07-13
 
 # need :
 # sudo apt install parallel gpg wget
@@ -59,7 +59,8 @@ function ckeckKey()
 
 function makeContents()
 {
-	pushd $wwwDir > /dev/null
+	path=$1
+	pushd $path > /dev/null
 	rm -f Contents*
 	find * -type f -not -path "Release*" -exec sha512sum '{}' \; >> Contents.tmp
 	sort -t' ' -k2 Contents.tmp > Contents
@@ -72,6 +73,7 @@ function makeContents()
 function makeRelease()
 {
 	checkGPGConf
+
 	pushd $wwwDir > /dev/null
 	gunzip -k Contents.gz
 	gpg --clear-sign --digest-algo SHA512 --output Release --default-key $email Contents
@@ -144,7 +146,7 @@ function getVersion()
 function sync()
 {
 	local canditateVersion=""
-	local canditateUrl=""
+	local canditateUrl=()
 	local canditateHash=""
 	local version=""
 	local hash=""
@@ -170,13 +172,11 @@ function sync()
 		if [[ "$localVersion" < "$version" ]]; then
 			if [[ "$canditateVersion" == "" || "$canditateVersion" < "$version" ]]; then
 				canditateVersion=$version
-				canditateUrl=$url
+				canditateUrl=($url)
 				canditateHash="$hash"
 				ReleaseInfosContent="$ReleaseInfosContentTmp"
-				#TODO remove from memory other servers in the same version
 			elif [[ "$canditateVersion" != "" || "$canditateVersion" == "$version" ]]; then
-				#TODO keep in memory other servers in the same version
-				echo "TODO keep in memory other servers in the same version"
+				canditateUrl[${#canditateUrl[*]}]=$url
 			fi
 		fi
 		version=""
@@ -185,19 +185,30 @@ function sync()
 
 	#TODO loop on all same version servers or exist if complete
 	if [[ "$canditateVersion" != "" 
-			&& "$canditateUrl" != "" 
+			&& ${#canditateUrl[*]} -gt 0
 			&& "$canditateHash" != "" 
 		]]; then
+
+echo "Local version: $localVersion"
+echo "Canditate version: $canditateVersion"
+#for a in  ${canditateUrl[*]}; do echo $a; done
+#exit
+		serverUrl=${canditateUrl[0]}
+
+
+
 		local tmpDirectory=$(mktemp -d -t tmp.XXXXXXXXXX)
 echo  $tmpDirectory
 
-		echo $ReleaseInfosContent > $tmpDirectory/ReleaseInfos
+
+
+		echo "$ReleaseInfosContent" > $tmpDirectory/ReleaseInfos
 		echo "$canditateHash" > $tmpDirectory/Release.sum
 
 		set +e
-		wget -q --tries=5 --timeout=60 ${canditateUrl}Contents.gz -O $tmpDirectory/Contents.gz
+		wget -q --tries=5 --timeout=60 ${serverUrl}Contents.gz -O $tmpDirectory/Contents.gz
 #TODO check error
-		wget -q --tries=5 --timeout=60 ${canditateUrl}Release.gz -O $tmpDirectory/Release.gz
+		wget -q --tries=5 --timeout=60 ${serverUrl}Release.gz -O $tmpDirectory/Release.gz
 #TODO check error
 		set -e
 
@@ -217,12 +228,15 @@ echo  $tmpDirectory
 #TODO check error
 			gunzip $tmpDirectory/Contents.gz
 
-			if [[ ! -f ./cache/Contents ]]; then
-				touch ./cache/Contents
+			if [[ -f ${wwwDir}Contents.gz ]]; then
+				cp ${wwwDir}Contents.gz $tmpDirectory/LocalContents.gz
+				gunzip $tmpDirectory/LocalContents.gz
+			else
+				touch $tmpDirectory/LocalContents
 			fi
 			
 			set +e
-			diff -n --suppress-common-lines ./cache/Contents $tmpDirectory/Release  > $tmpDirectory/newFiles
+			diff -n --suppress-common-lines $tmpDirectory/LocalContents $tmpDirectory/Release  > $tmpDirectory/newFiles
 			set -e
 
 			# cleaning
@@ -238,7 +252,7 @@ echo  $tmpDirectory
 
 			cp $tmpDirectory/availableNewFiles $tmpDirectory/availableNewFiles.url
 			# remove hash and keep url
-			sed -i "s|^[0-9a-f]*  |$canditateUrl|" $tmpDirectory/availableNewFiles.url
+			sed -i "s|^[0-9a-f]*  |$serverUrl|" $tmpDirectory/availableNewFiles.url
 
 			if [[ "$(head -n 1 $tmpDirectory/availableNewFiles.url)" != "" ]]; then
 				echo "update"
@@ -247,7 +261,7 @@ echo  $tmpDirectory
 #FIXME some time the name of file is truncate :-/
 # need to fix long path + long file name
 # happen on encrypted partition
-				#outDir=$(echo "$canditateUrl" | awk -F/ '{print $3}' | sed 's|:80$||')
+				#outDir=$(echo "$serverUrl" | awk -F/ '{print $3}' | sed 's|:80$||')
 				cat $tmpDirectory/availableNewFiles.url | parallel --gnu "wget --tries=5 --timeout=60 -qc -P $wwwTmp -x -nH "'{}' > /dev/null 2>&1
 
 				pushd ${wwwTmp} > /dev/null
@@ -255,16 +269,21 @@ echo  $tmpDirectory
 				sha512sum -c $tmpDirectory/availableNewFiles
 				mv $tmpDirectory/Release.gz .
 				mv $tmpDirectory/ReleaseInfos ${wwwTmp}ReleaseInfos
+
+				find * -type f -not -path "Release*" -exec sha512sum '{}' \; >> $tmpDirectory/Contents.tmp
+				cat $tmpDirectory/LocalContents >> $tmpDirectory/Contents.tmp
+				sort -u -t' ' -k2 $tmpDirectory/Contents.tmp > $tmpDirectory/LocalContents
+
+	
+
 				popd > /dev/null
 
 #TODO
-# - create new Contents.gz
-# - mv wwwDir/* to wwwTmp/
-# - cleanup
+# loop on canditateUrl if missing files
 
-
-#FIXME
-				cp $tmpDirectory/Release ./cache/Contents
+				rsync --remove-source-files -a $wwwTmp/ ${wwwDir}
+				mv $tmpDirectory/LocalContents $tmpDirectory/Contents
+				gzip -c $tmpDirectory/Contents  > ${wwwDir}Contents.gz
 			fi
 
 		fi
@@ -356,17 +375,22 @@ if [[ ! -f $confName ]]; then
 fi
 . ./$confName
 
+# TODO add
+# - no GPG check
+# - no wwwTmp
+
+
 readonly ARG="$1"
 if [[ "$ARG" == "sync" ]]; then
 	sync
 elif [[ "$ARG" == "index" ]]; then
-	if [[ "$2" != "" ]]; then
-		wwwDir=$2
+	if [[ "$#" -gt 1 ]]; then
+		wwwDir="$2"
 	fi
-	makeContents
+	makeContents $wwwDir
 elif [[ "$ARG" == "release" ]]; then
-	if [[ "$2" != "" ]]; then
-		wwwDir=$2
+	if [[ "$#" -gt 1 ]]; then
+		wwwDir="$2"
 	fi
 	makeRelease
 elif [[ "$ARG" == "keygen" ]]; then
