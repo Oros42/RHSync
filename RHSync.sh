@@ -8,7 +8,7 @@
 # date    2020-07-13
 
 # need :
-# sudo apt install parallel gpg wget
+# sudo apt install parallel gpg wget rsync
 
 set -euo pipefail
 
@@ -75,12 +75,20 @@ function makeRelease()
 	checkGPGConf
 
 	pushd $wwwDir > /dev/null
+
+	if [[ ! -f Contents.gz ]]; then
+		makeContents $wwwDir
+	fi
+
 	gunzip -k Contents.gz
 	gpg --clear-sign --digest-algo SHA512 --output Release --default-key $email Contents
 	gzip -c Release  > Release.gz
 	rm Release
 	date +"%F %T UTC" -u > ReleaseInfos.txt
 	sha512sum Release.gz >> ReleaseInfos.txt
+	if [[ -f ReleaseInfos ]]; then
+		rm ReleaseInfos
+	fi
 	gpg --clear-sign --digest-algo SHA512 --output ReleaseInfos --default-key $email ReleaseInfos.txt
 	rm ReleaseInfos.txt
 	rm Contents
@@ -168,7 +176,7 @@ function sync()
 	# search the last version available
 	for url in $nodes; do 
 		getVersion $url
-#FIXME keep in cache ReleaseInfos !!!
+
 		if [[ "$localVersion" < "$version" ]]; then
 			if [[ "$canditateVersion" == "" || "$canditateVersion" < "$version" ]]; then
 				canditateVersion=$version
@@ -183,113 +191,142 @@ function sync()
 		hash=""
 	done
 
-	#TODO loop on all same version servers or exist if complete
 	if [[ "$canditateVersion" != "" 
 			&& ${#canditateUrl[*]} -gt 0
 			&& "$canditateHash" != "" 
 		]]; then
 
-echo "Local version: $localVersion"
-echo "Canditate version: $canditateVersion"
-#for a in  ${canditateUrl[*]}; do echo $a; done
-#exit
-		serverUrl=${canditateUrl[0]}
-
-
+		echo "Local version: $localVersion"
+		echo "Canditate version: $canditateVersion"
 
 		local tmpDirectory=$(mktemp -d -t tmp.XXXXXXXXXX)
-echo  $tmpDirectory
-
-
 
 		echo "$ReleaseInfosContent" > $tmpDirectory/ReleaseInfos
 		echo "$canditateHash" > $tmpDirectory/Release.sum
 
-		set +e
-		wget -q --tries=5 --timeout=60 ${serverUrl}Contents.gz -O $tmpDirectory/Contents.gz
+
+		if [[ -f ${wwwDir}Contents.gz ]]; then
+			cp ${wwwDir}Contents.gz $tmpDirectory/LocalContents.gz
+			gunzip $tmpDirectory/LocalContents.gz
+		else
+			touch $tmpDirectory/LocalContents
+		fi
+
+		# for each canditates or exit if synchro is finish
+		for serverUrl in  ${canditateUrl[*]}; do
+			set +e
 #TODO check error
-		wget -q --tries=5 --timeout=60 ${serverUrl}Release.gz -O $tmpDirectory/Release.gz
+			if [[ ! -s $tmpDirectory/Release.gz ]]; then
+				wget -q --tries=5 --timeout=60 ${serverUrl}Release.gz -O $tmpDirectory/Release.gz
+
+				if [[ -s "$tmpDirectory/Release.gz" ]]; then
+					pushd $tmpDirectory > /dev/null
+					sha512sum -c Release.sum
+					popd > /dev/null
+
+					gunzip -t $tmpDirectory/Release.gz
 #TODO check error
-		set -e
+					gunzip -k $tmpDirectory/Release.gz
 
-		if [[ -s "$tmpDirectory/Release.gz" ]]; then
-			pushd $tmpDirectory > /dev/null
-			sha512sum -c Release.sum
-			popd > /dev/null
-
-			gunzip -t $tmpDirectory/Release.gz
-#TODO check error
-			gunzip -k $tmpDirectory/Release.gz
-
-			checkAndExtract "$tmpDirectory/Release" "$tmpDirectory/Release.tmp"
-			mv "$tmpDirectory/Release.tmp" "$tmpDirectory/Release"
-
-			gunzip -t $tmpDirectory/Contents.gz
-#TODO check error
-			gunzip $tmpDirectory/Contents.gz
-
-			if [[ -f ${wwwDir}Contents.gz ]]; then
-				cp ${wwwDir}Contents.gz $tmpDirectory/LocalContents.gz
-				gunzip $tmpDirectory/LocalContents.gz
-			else
-				touch $tmpDirectory/LocalContents
+					checkAndExtract "$tmpDirectory/Release" "$tmpDirectory/Release.tmp"
+					if [[ -s "$tmpDirectory/Release.tmp" ]]; then
+						mv "$tmpDirectory/Release.tmp" "$tmpDirectory/Release"
+					else
+						rm "$tmpDirectory/Release"
+					fi
+				fi
 			fi
-			
-			set +e
-			diff -n --suppress-common-lines $tmpDirectory/LocalContents $tmpDirectory/Release  > $tmpDirectory/newFiles
+#TODO check error
 			set -e
 
-			# cleaning
-			sed -i "/^[ad][0-9]* [0-9]*$/d" $tmpDirectory/newFiles
+			if [[ -s "$tmpDirectory/Release" ]]; then
+				if [ -f $tmpDirectory/Contents.gz ]; then
+					rm $tmpDirectory/Contents.gz
+				fi
+				if [ -f $tmpDirectory/Contents ]; then
+					rm $tmpDirectory/Contents
+				fi
 
-			# extract new files available in Contents
-			set +e
-			touch $tmpDirectory/availableNewFiles
-			while read line; do
-				grep "$line" $tmpDirectory/Contents >> $tmpDirectory/availableNewFiles
-			done < $tmpDirectory/newFiles
-			set -e
+				set +e
+				wget -q --tries=5 --timeout=60 ${serverUrl}Contents.gz -O $tmpDirectory/Contents.gz
+				set -e
 
-			cp $tmpDirectory/availableNewFiles $tmpDirectory/availableNewFiles.url
-			# remove hash and keep url
-			sed -i "s|^[0-9a-f]*  |$serverUrl|" $tmpDirectory/availableNewFiles.url
-
-			if [[ "$(head -n 1 $tmpDirectory/availableNewFiles.url)" != "" ]]; then
-				echo "update"
+				gunzip -t $tmpDirectory/Contents.gz
+#TODO check error
+				gunzip $tmpDirectory/Contents.gz
 				
+				set +e
+				diff -n --suppress-common-lines $tmpDirectory/LocalContents $tmpDirectory/Release  > $tmpDirectory/newFiles
+				set -e
+
+				# cleaning
+				sed -i "/^[ad][0-9]* [0-9]*$/d" $tmpDirectory/newFiles
+
+				if [ ! -s $tmpDirectory/newFiles ]; then
+					# No new files
+					break
+				fi
+
+				# extract new files available in Contents
+				set +e
+				if [ -f $tmpDirectory/availableNewFiles ]; then
+					rm $tmpDirectory/availableNewFiles
+				fi
+				touch $tmpDirectory/availableNewFiles
+
+				while read line; do
+					grep "$line" $tmpDirectory/Contents >> $tmpDirectory/availableNewFiles
+				done < $tmpDirectory/newFiles
+				set -e
+
+				# if have new files
+				if [ -s $tmpDirectory/availableNewFiles ]; then
+					cp $tmpDirectory/availableNewFiles $tmpDirectory/availableNewFiles.url
+					# remove hash and keep url
+					sed -i "s|^[0-9a-f]*  |$serverUrl|" $tmpDirectory/availableNewFiles.url
+
+					if [[ "$(head -n 1 $tmpDirectory/availableNewFiles.url)" != "" ]]; then
+						echo "update"
+						
 
 #FIXME some time the name of file is truncate :-/
 # need to fix long path + long file name
 # happen on encrypted partition
-				#outDir=$(echo "$serverUrl" | awk -F/ '{print $3}' | sed 's|:80$||')
-				cat $tmpDirectory/availableNewFiles.url | parallel --gnu "wget --tries=5 --timeout=60 -qc -P $wwwTmp -x -nH "'{}' > /dev/null 2>&1
+						#outDir=$(echo "$serverUrl" | awk -F/ '{print $3}' | sed 's|:80$||')
+						cat $tmpDirectory/availableNewFiles.url | parallel --gnu "wget --tries=5 --timeout=60 -qc -P $wwwTmp -x -nH "'{}' > /dev/null 2>&1
 
-				pushd ${wwwTmp} > /dev/null
+						pushd ${wwwTmp} > /dev/null
 #TODO loop on files and remove corrupted files
-				sha512sum -c $tmpDirectory/availableNewFiles
-				mv $tmpDirectory/Release.gz .
-				mv $tmpDirectory/ReleaseInfos ${wwwTmp}ReleaseInfos
+						sha512sum -c $tmpDirectory/availableNewFiles
 
-				find * -type f -not -path "Release*" -exec sha512sum '{}' \; >> $tmpDirectory/Contents.tmp
-				cat $tmpDirectory/LocalContents >> $tmpDirectory/Contents.tmp
-				sort -u -t' ' -k2 $tmpDirectory/Contents.tmp > $tmpDirectory/LocalContents
 
-	
+						# update local contents
+						find * -type f -not -path "Release*" -exec sha512sum '{}' \; >> $tmpDirectory/Contents.tmp
+						cat $tmpDirectory/LocalContents >> $tmpDirectory/Contents.tmp
+						sort -u -t' ' -k2 $tmpDirectory/Contents.tmp > $tmpDirectory/LocalContents	
 
-				popd > /dev/null
+						popd > /dev/null
+					fi
 
-#TODO
-# loop on canditateUrl if missing files
+				fi
 
-				rsync --remove-source-files -a $wwwTmp/ ${wwwDir}
-				mv $tmpDirectory/LocalContents $tmpDirectory/Contents
-				gzip -c $tmpDirectory/Contents  > ${wwwDir}Contents.gz
 			fi
+		done
 
+		# publish new files
+		mv $tmpDirectory/Release.gz $wwwTmp
+		mv $tmpDirectory/ReleaseInfos $wwwTmp
+		rsync --remove-source-files -a $wwwTmp/ ${wwwDir}
+		mv $tmpDirectory/LocalContents $tmpDirectory/Contents
+		gzip -c $tmpDirectory/Contents  > ${wwwDir}Contents.gz
+
+
+		rm -r $tmpDirectory
+		if [ ! -z "$(ls -A ${wwwTmp})" ]; then
+			rm -r ${wwwTmp}*
 		fi
 
-echo "end :-)"
-rm -r $tmpDirectory
+		echo "end :-)"
 	else
 		#TODO quite mode
 		echo "No update"
