@@ -151,6 +151,51 @@ function getVersion()
 	rm -r "$tmpDirectory"
 }
 
+
+function extractRelease()
+{
+	local in=$1
+	local out=$2
+	if [ -f $out ]; then
+		rm $out
+	fi
+	gunzip -c $in > ${out}.tmp
+	checkAndExtract ${out}.tmp ${out}
+}
+
+function extractContents()
+{
+	local in=$1
+	local out=$2
+	if [ -f $out ]; then
+		rm $out
+	fi
+	gunzip -c $in > $out
+}
+
+function checkNoMissingFiles()
+{
+	set +e
+	local path=$1
+	local tmp=$(mktemp -d -t tmp.XXXXXXXXXX)
+	local ok=0
+	extractRelease ${wwwDir}Release.gz $tmp/Release
+	extractContents ${wwwDir}Contents.gz $tmp/Contents
+	set +e
+	diff -n --suppress-common-lines $tmp/Contents $tmp/Release  > $tmp/newFiles
+	set -e
+
+	sed -i "/^[ad][0-9]* [0-9]*$/d" $tmp/newFiles
+
+	if [ -s $tmp/newFiles ]; then
+		ok=0
+	else
+		ok=1
+	fi
+
+	rm -r $tmp
+	echo $ok
+}
 function sync()
 {
 	local canditateVersion=""
@@ -169,8 +214,12 @@ function sync()
 
 	getVersion ${wwwDir}ReleaseInfos
 
-	if [[ "$version" != "" ]]; then
-		localVersion=$version
+	ret=$(checkNoMissingFiles ${wwwDir})
+	if [ "$ret" -eq 1 ]; then
+		# if no missing files
+		if [[ "$version" != "" ]]; then
+			localVersion=$version
+		fi
 	fi
 
 	# search the last version available
