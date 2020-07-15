@@ -1,6 +1,6 @@
 # RHSync
 The Remote HTTP Synchronization
 
-Work in progress on develop branch
-
-
+Example of partial websites  
+[Node1](./node1)  
+[Node2](./node2)  
