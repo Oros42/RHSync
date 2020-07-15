@@ -6,12 +6,13 @@ keyserver="hkps://keys.openpgp.org"
 
 # Email use to sign Release.gz and ReleaseInfos 
 #email="<gpg.email@example.com>"
-email=""
+email="testgpg5c69945c@ecirtam.net"
 
 
 #nodes="https://example.com/
 #--user user --password pass https://example.com/private/"
-nodes=""
+nodes="https://oros42.github.io/RHSync/node1/
+https://oros42.github.io/RHSync/node2/"
 
 # Where to store the private GPG key ?
 # absolute path

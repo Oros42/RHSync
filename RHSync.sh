@@ -177,23 +177,27 @@ function checkNoMissingFiles()
 {
 	set +e
 	local path=$1
-	local tmp=$(mktemp -d -t tmp.XXXXXXXXXX)
 	local ok=0
-	extractRelease ${wwwDir}Release.gz $tmp/Release
-	extractContents ${wwwDir}Contents.gz $tmp/Contents
-	set +e
-	diff -n --suppress-common-lines $tmp/Contents $tmp/Release  > $tmp/newFiles
-	set -e
+	if [[ -s ${wwwDir}Release.gz && -s ${wwwDir}Contents.gz ]]; then
+		local tmp=$(mktemp -d -t tmp.XXXXXXXXXX)
+		extractRelease ${wwwDir}Release.gz $tmp/Release
+		extractContents ${wwwDir}Contents.gz $tmp/Contents
+		set +e
+		diff -n --suppress-common-lines $tmp/Contents $tmp/Release  > $tmp/newFiles
+		set -e
 
-	sed -i "/^[ad][0-9]* [0-9]*$/d" $tmp/newFiles
+		sed -i "/^[ad][0-9]* [0-9]*$/d" $tmp/newFiles
 
-	if [ -s $tmp/newFiles ]; then
-		ok=0
+		if [ -s $tmp/newFiles ]; then
+			ok=0
+		else
+			ok=1
+		fi
+		rm -r $tmp
 	else
-		ok=1
+		ok=0
 	fi
 
-	rm -r $tmp
 	echo $ok
 }
 function sync()
