@@ -5,10 +5,27 @@ The Remote HTTP Synchronization
 
 ```bash
 sudo apt install parallel gpg curl wget
-cp config.dist config
+wget https://raw.githubusercontent.com/Oros42/RHSync/develop/RHSync.sh
+chmod +x RHSync.sh
+wget https://raw.githubusercontent.com/Oros42/RHSync/develop/config.dist -O config
 nano config
 ```
 
+## Demo
+
+```bash
+mkdir {out,tmp}
+echo 'wwwDir="$(pwd)/out/"
+wwwTmp="$(pwd)/tmp/"
+keyserver="hkps://keys.openpgp.org"
+email="testgpg5c69945c@ecirtam.net"
+nodes="https://oros42.github.io/RHSync/node1/
+https://oros42.github.io/RHSync/node2/"
+gpgHome="$(pwd)/private_keyrings/"
+' > configDemo
+./RHSync.sh -c configDemo --refreshkeys 0 sync demo/out/
+# Select 1
+```
 
 ## If you host the node 0
 

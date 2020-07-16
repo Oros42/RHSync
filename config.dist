@@ -1,5 +1,7 @@
-wwwDir="/var/www/mywebsite"
-wwwTmp="/var/www/tmp/"
+# Where you whant to save data
+wwwDir="/var/www/mywebsite" # Absolute path
+# A temporary folder
+wwwTmp="/var/www/tmp/" # Absolute path
 
 keyserver="hkps://keys.openpgp.org"
 #keyserver="hkp://zkaan2xfbuxia2wpf7ofnkbz6r5zdbbvxbunvp5g2iebopbfc4iqmbad.onion"
