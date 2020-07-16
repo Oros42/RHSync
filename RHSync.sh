@@ -265,6 +265,16 @@ function sync()
 			touch $tmpDirectory/LocalContents
 		fi
 
+		if [ -d ${wwwTmp}tmp ]; then
+			rm -r ${wwwTmp}tmp
+		fi
+
+		if [ -d ${wwwTmp}ok ]; then
+			rm -r ${wwwTmp}ok
+		fi
+
+		mkdir -p ${wwwTmp}{tmp,ok}
+
 		# for each canditates or exit if synchro is finish
 		for serverUrl in  ${canditateUrl[*]}; do
 			set +e
@@ -346,9 +356,22 @@ function sync()
 # need to fix long path + long file name
 # happen on encrypted partition
 						#outDir=$(echo "$serverUrl" | awk -F/ '{print $3}' | sed 's|:80$||')
-						cat $tmpDirectory/availableNewFiles.url | parallel --gnu "wget --tries=5 --timeout=60 -qc -P $wwwTmp -x -nH "'{}' > /dev/null 2>&1
+						cat $tmpDirectory/availableNewFiles.url | parallel --gnu "wget --tries=5 --timeout=60 -qc -P ${wwwTmp}tmp -x -nH "'{}' > /dev/null 2>&1
 
-						pushd ${wwwTmp} > /dev/null
+						pushd ${wwwTmp}tmp > /dev/null
+
+						# fin sub folder path
+						local path=${serverUrl:8}
+						path=${path#*/}
+						if [ "$path" != "" ]; then
+							if [ -d $path ]; then
+								cd $path
+							else
+#FIXME
+echo "Path ${wwwTmp}$path doesn't exist !"
+							fi
+						fi
+
 #TODO loop on files and remove corrupted files
 						sha512sum -c $tmpDirectory/availableNewFiles
 
@@ -358,6 +381,8 @@ function sync()
 						cat $tmpDirectory/LocalContents >> $tmpDirectory/Contents.tmp
 						sort -u -t' ' -k2 $tmpDirectory/Contents.tmp > $tmpDirectory/LocalContents	
 
+
+						rsync --remove-source-files -a ./* ${wwwTmp}ok
 						popd > /dev/null
 					fi
 
@@ -367,9 +392,9 @@ function sync()
 		done
 
 		# publish new files
-		mv $tmpDirectory/Release.gz $wwwTmp
-		mv $tmpDirectory/ReleaseInfos $wwwTmp
-		rsync --remove-source-files -a $wwwTmp/ ${wwwDir}
+		mv $tmpDirectory/Release.gz ${wwwTmp}ok
+		mv $tmpDirectory/ReleaseInfos ${wwwTmp}ok
+		rsync --remove-source-files -a ${wwwTmp}ok/ ${wwwDir}
 		mv $tmpDirectory/LocalContents $tmpDirectory/Contents
 		gzip -c $tmpDirectory/Contents  > ${wwwDir}Contents.gz
 
