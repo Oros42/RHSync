@@ -1,5 +1,5 @@
 # RHSync
-The Remote HTTP Synchronization
+The Remote HTTP Synchronization  
 
 ## Install
 
@@ -26,6 +26,17 @@ gpgHome="$(pwd)/private_keyrings/"
 ./RHSync.sh -c configDemo --refreshkeys 0 sync demo/out/
 # Select 1
 ```
+Open out/index.html. You shout see a picture.  
+Now remove some random file.  
+```bash
+rm out/img_1*
+```
+Update you cache and re-run the synchro :  
+```bash
+./RHSync.sh -c configDemo --refreshkeys 0 index
+./RHSync.sh -c configDemo --refreshkeys 0 sync demo/out/
+```
+It download only missing files :-)  
 
 ## If you host the node 0
 
@@ -34,8 +45,8 @@ gpgHome="$(pwd)/private_keyrings/"
 ```bash
 ./RHSync.sh keygen
 ```
-/!\ gpg-agent open a window to let you enter your password.
-So you need a display :-/
+/!\ gpg-agent open a window to let you enter your password.  
+So you need a display :-/  
 
 ### Create a release
 ```bash

@@ -5,7 +5,7 @@
 # author  Oros42 (ecirtam.net)
 # link    https://github.com/Oros42/RHSync
 # license CC0 Public Domain
-# date    2020-07-13
+# date    2020-07-16
 
 # need :
 # sudo apt install parallel gpg wget rsync
