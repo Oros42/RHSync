@@ -1,0 +1,22 @@
+# Where you whant to save data
+wwwDir="/var/www/mywebsite" # Absolute path
+# A temporary folder
+wwwTmp="/var/www/tmp/" # Absolute path
+
+keyserver="hkps://keys.openpgp.org"
+#keyserver="hkp://zkaan2xfbuxia2wpf7ofnkbz6r5zdbbvxbunvp5g2iebopbfc4iqmbad.onion"
+
+# Email use to sign Release.gz and ReleaseInfos 
+#email="<gpg.email@example.com>"
+email="testgpg5c69945c@ecirtam.net"
+
+
+#nodes="https://example.com/
+#--user user --password pass https://example.com/private/"
+nodes="https://oros42.github.io/RHSync/node1/
+https://oros42.github.io/RHSync/node2/"
+
+# Where to store the private GPG key ?
+# absolute path
+# Chose a safe encrypted place out of Internet
+gpgHome="$(pwd)/private_keyrings/"
