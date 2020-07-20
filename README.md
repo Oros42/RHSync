@@ -4,7 +4,7 @@ The Remote HTTP Synchronization
 ## Install
 
 ```bash
-sudo apt install parallel gpg curl wget
+sudo apt install parallel gpg wget rsync
 wget https://raw.githubusercontent.com/Oros42/RHSync/develop/RHSync.sh
 chmod +x RHSync.sh
 wget https://raw.githubusercontent.com/Oros42/RHSync/develop/config.dist -O config
